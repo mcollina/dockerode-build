@@ -13,8 +13,9 @@ var fs = require('fs')
 var eos = require('end-of-stream')
 var fsAccess = require('fs-access')
 
-function dockerBuild (dockerFile, opts) {
-  var docker = new Dockerode()
+function dockerBuild (dockerFile, docker, opts) {
+  docker = docker || new Dockerode()
+
   var result = through.obj(function (chunk, enc, cb) {
     if (chunk.stream) {
       cb(null, chunk.stream)
@@ -64,7 +65,7 @@ function dockerBuild (dockerFile, opts) {
         }
 
         var tar = tarfs.pack(path.dirname(dockerFile))
-        docker.buildImage(tar, opts, function (err, stream) {
+        docker.buildImage(tar, {}, function (err, stream) {
           if (err) {
             result.emit('error', err)
             return
@@ -101,7 +102,7 @@ function start () {
 
   dockerFile = path.resolve(dockerFile)
 
-  pump(dockerBuild(dockerFile, argv), process.stdout, function (err) {
+  pump(dockerBuild(dockerFile, null, argv), process.stdout, function (err) {
     handleError(err)
   })
 
