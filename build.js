@@ -15,12 +15,17 @@ var fsAccess = require('fs-access')
 var jsonStream = require('jsonstream')
 var multiline = require('./lib/multiline')
 
-function dockerBuild (dockerFile, docker, opts) {
-  docker = docker || new Dockerode()
+function dockerBuild (dockerFile, opts) {
+  opts = opts || {}
+  var docker = new Dockerode(opts.docker)
 
   var result = through.obj(function (chunk, enc, cb) {
     if (chunk.stream) {
       cb(null, chunk.stream)
+      var match = chunk.stream.trim().match(/Successfully built ([^ ]+)$/)
+      if (match) {
+        this.emit('complete', match[1])
+      }
     } else if (chunk.progressDetail) {
       this.emit('downloadProgress', chunk)
       cb()
@@ -83,6 +88,14 @@ function dockerBuild (dockerFile, docker, opts) {
     })
   })
 
+  result._pipe = result.pipe
+  result.pipe = function (dest) {
+    if (dest.isTTY) {
+      progressBars(this, dest)
+    }
+    return result._pipe(dest)
+  }
+
   return result
 }
 
@@ -112,10 +125,7 @@ function start () {
 
   dockerFile = path.resolve(dockerFile)
 
-  var stream = dockerBuild(dockerFile, null, argv)
-  progressBars(stream, process.stdout)
-
-  pump(stream, process.stdout, function (err) {
+  pump(dockerBuild(dockerFile, argv), process.stdout, function (err) {
     handleError(err)
   })
 
