@@ -12,6 +12,8 @@ var pump = require('pump')
 var fs = require('fs')
 var eos = require('end-of-stream')
 var fsAccess = require('fs-access')
+var jsonStream = require('jsonstream')
+var multiline = require('./lib/multiline')
 
 function dockerBuild (dockerFile, docker, opts) {
   docker = docker || new Dockerode()
@@ -19,6 +21,9 @@ function dockerBuild (dockerFile, docker, opts) {
   var result = through.obj(function (chunk, enc, cb) {
     if (chunk.stream) {
       cb(null, chunk.stream)
+    } else if (chunk.progressDetail) {
+      this.emit('downloadProgress', chunk)
+      cb()
     } else if (chunk.status) {
       cb(null, chunk.status + '\n')
     } else if (chunk.error) {
@@ -28,7 +33,9 @@ function dockerBuild (dockerFile, docker, opts) {
     }
   })
 
-  if (!fsAccess.sync(dockerFile)) {
+  try {
+    fsAccess.sync(dockerFile)
+  } catch (err) {
     dockerFile = path.join(dockerFile, 'Dockerfile')
   }
 
@@ -37,8 +44,8 @@ function dockerBuild (dockerFile, docker, opts) {
       return result.emit('error', err)
     }
 
-    var from;
-    data.toString().split("\n").forEach(function (line) {
+    var from
+    data.toString().split('\n').forEach(function (line) {
       var match = line.match(/^FROM +(.*)$/)
       if (match) {
         from = match[1]
@@ -56,7 +63,7 @@ function dockerBuild (dockerFile, docker, opts) {
         return
       }
 
-      stream.pipe(split(looseParse)).pipe(result, { end: false })
+      stream.pipe(jsonStream.parse()).pipe(result, { end: false })
 
       eos(stream, function (err) {
         if (err) {
@@ -65,12 +72,12 @@ function dockerBuild (dockerFile, docker, opts) {
         }
 
         var tar = tarfs.pack(path.dirname(dockerFile))
-        docker.buildImage(tar, {}, function (err, stream) {
+        docker.buildImage(tar, opts, function (err, stream) {
           if (err) {
             result.emit('error', err)
             return
           }
-          pump(stream, split(looseParse), result)
+          pump(stream, split(JSON.parse), result)
         })
       })
     })
@@ -79,18 +86,21 @@ function dockerBuild (dockerFile, docker, opts) {
   return result
 }
 
-function looseParse (line) {
-  var obj
-  try {
-    obj = JSON.parse(line)
-  } catch (err) {
-    // nothing to do
-    obj = {}
-  }
-  return obj
-}
-
 module.exports = dockerBuild
+
+function progressBars (buildStream, output) {
+  var multi = multiline(output)
+
+  buildStream.on('downloadProgress', function (progress) {
+    var line = progress.status
+
+    if (progress.progress) {
+      line += ' ' + progress.progress
+    }
+
+    multi.update(progress.id, line)
+  })
+}
 
 function start () {
   var argv = minimist(process.argv.slice(2))
@@ -102,7 +112,10 @@ function start () {
 
   dockerFile = path.resolve(dockerFile)
 
-  pump(dockerBuild(dockerFile, null, argv), process.stdout, function (err) {
+  var stream = dockerBuild(dockerFile, null, argv)
+  progressBars(stream, process.stdout)
+
+  pump(stream, process.stdout, function (err) {
     handleError(err)
   })
 
