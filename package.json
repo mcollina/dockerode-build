@@ -1,6 +1,6 @@
 {
   "name": "dockerode-build",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Build an image using dockerode a tar-fs",
   "main": "build.js",
   "scripts": {
