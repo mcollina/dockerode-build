@@ -24,7 +24,7 @@ function dockerBuild (dockerFile, opts) {
       cb(null, chunk.stream)
       var match = chunk.stream.trim().match(/Successfully built ([^ ]+)$/)
       if (match) {
-        this.emit('complete', match[1])
+        emitComplete(docker, this, match[1])
       }
     } else if (chunk.progressDetail) {
       this.emit('downloadProgress', chunk)
@@ -112,6 +112,16 @@ function dockerBuild (dockerFile, opts) {
   }
 
   return result
+}
+
+function emitComplete (docker, stream, id) {
+  docker.getImage(id).inspect(function (err, data) {
+    if (err) {
+      stream.emit('error', err)
+      return
+    }
+    stream.emit('complete', data.Id)
+  })
 }
 
 module.exports = dockerBuild
