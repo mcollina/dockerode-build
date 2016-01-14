@@ -11,9 +11,9 @@ var through = require('through2')
 var pump = require('pump')
 var fs = require('fs')
 var eos = require('end-of-stream')
-var fsAccess = require('fs-access')
 var jsonStream = require('jsonstream')
 var multiline = require('./lib/multiline')
+var buildIgnore = require('./lib/ignore')
 
 function dockerBuild (dockerFile, opts) {
   opts = opts || {}
@@ -39,9 +39,15 @@ function dockerBuild (dockerFile, opts) {
   })
 
   try {
-    fsAccess.sync(dockerFile)
+    var stat = fs.statSync(dockerFile)
+    if (!stat.isFile()) {
+      dockerFile = path.join(dockerFile, 'Dockerfile')
+    }
   } catch (err) {
-    dockerFile = path.join(dockerFile, 'Dockerfile')
+    process.nextTick(function () {
+      result.emit('error', err)
+    })
+    return
   }
 
   fs.readFile(dockerFile, function (err, data) {
@@ -76,13 +82,22 @@ function dockerBuild (dockerFile, opts) {
           return
         }
 
-        var tar = tarfs.pack(path.dirname(dockerFile))
-        docker.buildImage(tar, opts, function (err, stream) {
+        buildIgnore(dockerFile, function (err, ignore) {
           if (err) {
             result.emit('error', err)
             return
           }
-          pump(stream, split(JSON.parse), result)
+
+          var tar = tarfs.pack(path.dirname(dockerFile), {
+            ignore: ignore
+          })
+          docker.buildImage(tar, opts, function (err, stream) {
+            if (err) {
+              result.emit('error', err)
+              return
+            }
+            pump(stream, split(JSON.parse), result)
+          })
         })
       })
     })
