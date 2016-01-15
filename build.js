@@ -68,6 +68,10 @@ function dockerBuild (dockerFile, opts) {
       return
     }
 
+    if (from.indexOf(':') < 0) {
+      from += ':latest'
+    }
+
     docker.pull(from, function (err, stream) {
       if (err) {
         result.emit('error', err)
