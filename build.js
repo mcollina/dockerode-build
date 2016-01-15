@@ -11,7 +11,7 @@ var through = require('through2')
 var pump = require('pump')
 var fs = require('fs')
 var eos = require('end-of-stream')
-var jsonStream = require('jsonstream')
+var jsonStream = require('JSONStream')
 var multiline = require('multiline-update')
 var buildIgnore = require('./lib/ignore')
 
