@@ -12,7 +12,7 @@ var pump = require('pump')
 var fs = require('fs')
 var eos = require('end-of-stream')
 var jsonStream = require('jsonstream')
-var multiline = require('./lib/multiline')
+var multiline = require('multiline-update')
 var buildIgnore = require('./lib/ignore')
 
 function dockerBuild (dockerFile, opts) {
