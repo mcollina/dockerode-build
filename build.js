@@ -56,7 +56,7 @@ function dockerBuild (dockerFile, opts) {
     }
 
     var from
-    data.toString().split('\n').forEach(function (line) {
+    data.toString().split(/\r?\n/).forEach(function (line) {
       var match = line.match(/^FROM +(.*)$/)
       if (match) {
         from = match[1]
